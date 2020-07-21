@@ -56,6 +56,9 @@
 		},
 		"TimelineFileBackend": {
 			"value": ""
+		},
+		"TimelineUploadDir": {
+			"value": "/timeline-render"
 		}
 	},
 	"manifest_version": 2
