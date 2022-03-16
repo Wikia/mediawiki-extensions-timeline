@@ -61,6 +61,9 @@
 		},
 		"TimelineRsvgCommand": {
 			"value": "/usr/bin/rsvg-convert"
+		},
+		"TimelineUploadDir": {
+			"value": "/timeline-render"
 		}
 	},
 	"manifest_version": 2
