@@ -50,7 +50,7 @@ class Timeline implements ParserFirstCallInitHook {
 	 * @return string HTML
 	 */
 	public static function onTagHook( ?string $timelinesrc, array $args, Parser $parser ) {
-		global $wgUploadPath;
+		global $wgUploadPath, $wgTimelineUploadDir;
 
 		$pOutput = $parser->getOutput();
 		$pOutput->addModuleStyles( [ 'ext.timeline.styles' ] );
@@ -77,8 +77,11 @@ class Timeline implements ParserFirstCallInitHook {
 		$hash = \Wikimedia\base_convert( sha1( serialize( $cacheOptions ) ), 16, 36, 31 );
 		$backend = self::getBackend();
 		// Storage destination path (excluding file extension)
-		// TODO: Implement $wgHashedUploadDirectory layout
-		$pathPrefix = 'mwstore://' . $backend->getName() . "/timeline-render/$hash";
+		// Fandom change - start
+		// Allow to override default upload dir
+		// @author t-tomalak - PLATFORM-4961
+		$pathPrefix = 'mwstore://' . $backend->getName() . "$wgTimelineUploadDir/$hash";
+		// Fandom change - end
 
 		$options += [
 			'pathPrefix' => $pathPrefix,
