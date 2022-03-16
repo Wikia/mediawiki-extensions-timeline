@@ -34,7 +34,7 @@ class Timeline {
 	public static function renderTimeline( $timelinesrc, array $args, $parser, $frame ) {
 		global $wgUploadDirectory, $wgUploadPath, $wgArticlePath, $wgTmpDirectory;
 		global $wgTimelineFileBackend, $wgTimelineEpochTimestamp, $wgTimelinePerlCommand, $wgTimelineFile;
-		global $wgTimelineFontFile, $wgTimelineFontDirectory, $wgTimelinePloticusCommand;
+		global $wgTimelineFontFile, $wgTimelineFontDirectory, $wgTimelinePloticusCommand, $wgTimelineUploadDir;
 
 		$parser->getOutput()->addModuleStyles( 'ext.timeline.styles' );
 
@@ -64,7 +64,11 @@ class Timeline {
 		$hash = self::hash( $timelinesrc, $args );
 
 		// Storage destination path (excluding file extension)
-		$pathPrefix = 'mwstore://' . $backend->getName() . "/timeline-render/$hash";
+		// Fandom change - start
+		// Allow to override default upload dir
+		// @author t-tomalak - PLATFORM-4961
+		$pathPrefix = 'mwstore://' . $backend->getName() . "$wgTimelineUploadDir/$hash";
+		// Fandom change - end
 
 		$previouslyFailed = $backend->fileExists( [ 'src' => "{$pathPrefix}.err" ] );
 		$previouslyRendered = $backend->fileExists( [ 'src' => "{$pathPrefix}.png" ] );
@@ -179,7 +183,17 @@ class Timeline {
 			}
 		}
 
-		$err = $backend->getFileContents( [ 'src' => "{$pathPrefix}.err" ] );
+		// Fandom change - start
+		// We need to check if file exists at first, because otherwise
+		// we will receive, a lot of warnings of not existing index
+		// @author t-tomalak - PLATFORM-4961
+		$err = '';
+		if (
+			$backend->fileExists( [ 'src' => "{$pathPrefix}.err", 'latest' => true /* omit cache */ ] )
+		) {
+			$err = $backend->getFileContents( [ 'src' => "{$pathPrefix}.err" ] );
+		}
+		// Fandom change - end
 
 		if ( $err != "" ) {
 			// Convert the error from poorly-sanitized HTML to plain text
