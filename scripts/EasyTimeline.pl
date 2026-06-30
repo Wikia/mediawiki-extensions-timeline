@@ -817,7 +817,13 @@ sub ParseBarData {
             # }
             elsif ($attribute =~ /^Text$/i) {
                 $text = $attrvalue;
-                $text =~ s/\\n/~/gs;
+                # Strip newline-ish content that would otherwise close
+                # out the BarData label and reach the 'stubs: text'
+                # block of the generated ploticus script as a column-0
+                # directive. \v covers LF, CR and other vertical
+                # whitespace; \\n catches the literal two-char form
+                # that ParseText derives from '~'.
+                $text =~ s/(?:\v|\\n)/~/gs;
                 if ($text =~ /\~/) {
                     &Warning( "BarData attribute 'text' contains ~ (tilde).\n"
                             . "Tilde will not be translated into newline character (only in PlotData)"
@@ -2519,6 +2525,10 @@ sub ParseScale {
             delete($Attributes{"grid"});
         }
         elsif ($attribute =~ /Text/i) {
+            # Strip newline-ish content that would otherwise close out
+            # the 'stubs: list' arg in PlotScale and reach the
+            # generated ploticus script as a column-0 directive.
+            $attrvalue =~ s/(?:\v|\\n)/~/gs;
             $attrvalue =~ s/\~/\\n/g;
             $attrvalue =~ s/^\"//g;
             $attrvalue =~ s/\"$//g;
@@ -2724,7 +2734,17 @@ sub ParseTextData {
             }
             elsif ($attribute =~ /^Text$/i) {
                 $text = $attrvalue;
-                $text =~ s/\\n/~/gs;
+                # Strip newline-ish content that would otherwise
+                # survive WriteText mode "^" (which splits only on
+                # caret) and reach the generated ploticus script.
+                # Two forms can arrive here: real vertical whitespace
+                # (LF / CR / VT / FF / etc.) produced by ExtractText
+                # from a 'text:"...\n..."' value, and the literal
+                # two-char sequence \n that ParseText derives from
+                # '~'. Both are mapped to '~' so they cannot close out
+                # the ploticus 'text:' attribute and inject column-0
+                # directives.
+                $text =~ s/(?:\v|\\n)/~/gs;
                 if ($text =~ /\~/) {
                     &Warning("TextData attribute 'text' contains ~ (tilde).\n"
                             . "Tilde will not be translated into newline character (only in PlotData)"
@@ -3985,8 +4005,13 @@ sub WritePlotFile {
     print "Running Ploticus to generate svg file $file_vector\n";
 
     my $escaped_font_file = EscapeShellArg($font_file);
+    # -noshell disables ploticus directives that invoke /bin/sh
+    # (#proc getdata command:, #proc getdata file:, #shell ... #endshell).
+    # EasyTimeline never emits any of these, so this is a no-op for
+    # legitimate input but blocks command execution via injection.
     my $cmd =
           EscapeShellArg($pl)
+        . " -noshell"
         . " $map -" . "svg" . " -o "
         . EscapeShellArg($file_vector) . " "
         . EscapeShellArg($file_script)
@@ -4032,6 +4057,7 @@ sub WritePlotFile {
 
     $cmd =
           EscapeShellArg($pl)
+        . " -noshell"
         . " $map -"
         . $image_file_fmt . " -o "
         . EscapeShellArg($file_bitmap) . " "
@@ -4134,7 +4160,7 @@ sub WritePlotFile {
             {$1 style="fill:blue;">$3}gx;
         }
         else {
-            $svg =~ s/\[(\d+)\[ (.*?) \]\d+\]/'<a style="fill:blue;" xlink:href="' . $linksSVG[$1] . '">' . $2 . '<\/a>'/gxe;
+            $svg =~ s/\[(\d+)\[ (.*?) \]\d+\]/'<a style="fill:blue;" xlink:href="' . &NormalizeURLForSVG($linksSVG[$1]) . '">' . $2 . '<\/a>'/gxe;
         }
 
         open $file_vector_handle, '>', $file_vector
@@ -5119,6 +5145,20 @@ sub NormalizeURL {
     $url =~ s/(https?)\:?\/?\/?/$1:\/\//
         ;    # add possibly missing special characters
     $url =~ s/ /%20/g;
+    return ($url);
+}
+
+sub NormalizeURLForSVG {
+    my $url = shift;
+    # Turn relative URLs into full URLs by appending them to the article path
+    # (which is expanded in PHP before being passed to this script).
+    # This way, the SVG is more likely to pass the checks in UploadVerification,
+    # which do not support relative URLs.
+    if ($url !~ /^https?:\/\//) {
+        my $newurl = $articlepath;
+        $newurl =~ s/\$1/$url/;
+        $url = $newurl;
+    }
     return ($url);
 }
 
