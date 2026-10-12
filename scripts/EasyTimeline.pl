@@ -976,6 +976,13 @@ sub ParseColors {
                     push @LegendData, $colorname;
                 }
                 elsif (!($attrvalue =~ /^[nN]$/)) {
+                    # Collapse newline-ish content first so the value is
+                    # single-line: otherwise a '#' after an embedded
+                    # newline would still reach the 'specifyorder:'
+                    # block as a column-0 directive, past the leading-#
+                    # check below. \v covers LF/CR/VT/FF; \\n catches the
+                    # literal two-char form. Mirrors ParseBarData.
+                    $legendvalue =~ s/(?:\v|\\n)/~/gs;
                     $legendvalue = &ParseText($legendvalue);
                     # Legend entries end up as column-0 lines in the
                     # ploticus 'specifyorder:' block, so a leading '#'
@@ -4923,6 +4930,13 @@ sub ParseText {
 # the rendered image, so strip the leading hashes outright.
 sub SanitizeStubText {
     my $text = shift;
+    return ($text) if (!defined($text));
+    # Defence in depth: collapse any vertical whitespace so a later
+    # line can never begin a ploticus directive, then strip leading '#'
+    # runs. Callers (ParseBarData, ParseColors) already collapse
+    # newlines, but this keeps the helper safe if reached from a path
+    # that does not.
+    $text =~ s/\v+/ /gs;
     while ($text =~ s/^\s*\#+//) { }
     return ($text);
 }
