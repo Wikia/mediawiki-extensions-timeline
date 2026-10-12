@@ -3309,6 +3309,10 @@ sub WriteProcAnnotate {
     if ($link ne "") {
         $MapPNG = $true;
 
+        # LOREE-169: link/hint reach a Ploticus clickmap context below.
+        $link = &SanitizePloticusField($link);
+        $hint = &SanitizePloticusField($hint);
+
         push @PlotTextsPng, "#proc annotate\n";
         push @PlotTextsPng, "  location: $xpos $ypos\n";
 
@@ -3858,6 +3862,9 @@ sub WritePlotFile {
                     . " $barcnt(s)-0.05\n";
                 $scriptPng3 .=
                     "  color: " . $BackgroundColors{"canvas"} . "\n";
+                # LOREE-169: strip Ploticus sigils before clickmap emit.
+                $link = &SanitizePloticusField($link);
+                $hint = &SanitizePloticusField($hint);
                 $scriptPng3 .= "  clickmapurl: " . $link . "\n";
                 if ((defined($hint)) && ($hint ne "")) {
                     $scriptPng3 .= "  clickmaplabel: " . $hint . "\n";
@@ -4303,6 +4310,12 @@ sub PlotBars {
         foreach my $entry (@PlotBarsNow) {
             my ($width, $bar, $from, $till, $color, $link, $hint) =
                 split(",", $entry);
+            # LOREE-169: link/hint become fields 5/6 of this '#proc
+            # getdata' block, referenced by '@@5'/'@@6' in clickmapurl/
+            # clickmaplabel. Strip Ploticus macro/field sigils so they
+            # cannot reach Ploticus value processing as active syntax.
+            $link = &SanitizePloticusField($link);
+            $hint = &SanitizePloticusField($hint);
             if ($width < $maxwidth) {
                 push @PlotBarsLater, $entry;
                 next;
@@ -4879,6 +4892,33 @@ sub ParseText {
     $text =~ s/\@\#\$/~/g;
 
     return ($text);
+}
+
+# LOREE-169 defence in depth. Attacker-controlled link/hint values are
+# written into a Ploticus data-processing context: as fields of a
+# '#proc getdata' block referenced by '@@5'/'@@6', and as
+# 'clickmapurl:'/'clickmaplabel:' attribute values. Ploticus evaluates
+# '$name(...)' functions (e.g. $formatfloat), '@field' references and
+# backtick sequences in those contexts, and Ploticus 2.42 has memory-
+# safety bugs reachable that way (format-string leak in functions.c,
+# out-of-bounds write in value.c TDH_setvalue). '-noshell' does not
+# cover this. The authoritative fix is upgrading/patching Ploticus and
+# isolating the render worker; this only strips the macro/function/
+# field sigils so they cannot reach Ploticus as active syntax.
+#
+# Values arriving here are either EncodeInput-encoded ('$'->'%24%',
+# '@'->'%40%', '`'->'%60%') or EncodeURL-encoded for links; strip both
+# the EncodeInput tokens and any raw form. EncodeURL's '%25%XX' tokens
+# (ordinary percent-encoding) are left untouched, as a string field
+# carrying them is inert.
+sub SanitizePloticusField {
+    my $v = shift;
+    return $v if (!defined($v));
+    $v =~ s/\%24\%//g;    # encoded $
+    $v =~ s/\%40\%//g;    # encoded @
+    $v =~ s/\%60\%//g;    # encoded `
+    $v =~ s/[\$\@\`]//g;  # raw $ @ `
+    return $v;
 }
 
 sub BarDefined {
