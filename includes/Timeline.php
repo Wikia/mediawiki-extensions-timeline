@@ -24,7 +24,7 @@ class Timeline implements ParserFirstCallInitHook {
 	/**
 	 * Bump when some change requires re-rendering all timelines
 	 */
-	private const CACHE_VERSION = 3;
+	private const CACHE_VERSION = 4;
 
 	private static ?FileBackend $backend = null;
 

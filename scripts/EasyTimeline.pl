@@ -824,6 +824,15 @@ sub ParseBarData {
                 # whitespace; \\n catches the literal two-char form
                 # that ParseText derives from '~'.
                 $text =~ s/(?:\v|\\n)/~/gs;
+                # Bar labels end up as column-0 lines in the ploticus
+                # 'stubs: text' block, so a leading '#' would be run
+                # as a ploticus directive (e.g. #include /etc/passwd).
+                if ($text =~ /^\s*\#/) {
+                    &Warning( "BarData attribute 'text' may not start with # (hash).\n"
+                            . "Leading # removed."
+                    );
+                    $text = &SanitizeStubText($text);
+                }
                 if ($text =~ /\~/) {
                     &Warning( "BarData attribute 'text' contains ~ (tilde).\n"
                             . "Tilde will not be translated into newline character (only in PlotData)"
@@ -967,7 +976,23 @@ sub ParseColors {
                     push @LegendData, $colorname;
                 }
                 elsif (!($attrvalue =~ /^[nN]$/)) {
+                    # Collapse newline-ish content first so the value is
+                    # single-line: otherwise a '#' after an embedded
+                    # newline would still reach the 'specifyorder:'
+                    # block as a column-0 directive, past the leading-#
+                    # check below. \v covers LF/CR/VT/FF; \\n catches the
+                    # literal two-char form. Mirrors ParseBarData.
+                    $legendvalue =~ s/(?:\v|\\n)/~/gs;
                     $legendvalue = &ParseText($legendvalue);
+                    # Legend entries end up as column-0 lines in the
+                    # ploticus 'specifyorder:' block, so a leading '#'
+                    # would be run as a ploticus directive.
+                    if ($legendvalue =~ /^\s*\#/) {
+                        &Warning( "Colors attribute 'legend' may not start with # (hash).\n"
+                                . "Leading # removed."
+                        );
+                        $legendvalue = &SanitizeStubText($legendvalue);
+                    }
                     push @LegendData, $legendvalue;
                 }
             }
@@ -3807,6 +3832,10 @@ sub WritePlotFile {
             }
 
             $text =~ s/\[+([^\]]*)\]+/$1/;
+            # Defence in depth: never let a stub line start with '#'
+            # (ploticus directive), see SanitizeStubText.
+            $text = &SanitizeStubText($text);
+            if ($text =~ /^\s*$/) { $text = "\\"; }
             $scriptPng2 .= "$text\n";
             if (defined($link)) {
                 push @linksSVG, $link;
@@ -3865,6 +3894,10 @@ sub WritePlotFile {
 
                 $text =~ s/\[+([^\]]*)\]+/$1/;
             }
+            # Defence in depth: never let a stub line start with '#'
+            # (ploticus directive), see SanitizeStubText.
+            $text = &SanitizeStubText($text);
+            if ($text =~ /^\s*$/) { $text = "\\"; }
             $scriptPng2 .= "$text\n";
 
             $barcnt--;
@@ -3953,7 +3986,14 @@ sub WritePlotFile {
             $script .= "  specifyorder:\n";
             for (1 .. $perColumn) {
                 my $category = shift(@LegendData);
-                if (defined($category)) { $script .= "$category\n"; }
+                if (defined($category)) {
+                    # Defence in depth: never let a specifyorder line
+                    # start with '#' (ploticus directive), and never
+                    # emit an empty line (it would end the block).
+                    $category = &SanitizeStubText($category);
+                    if ($category =~ /^\s*$/) { $category = "\\"; }
+                    $script .= "$category\n";
+                }
             }
             $script .= "\n";
             $Legend{"left"} += $Legend{"columnwidth"};
@@ -4878,6 +4918,26 @@ sub ParseText {
     $text =~ s/\~/\\n/g;
     $text =~ s/\@\#\$/~/g;
 
+    return ($text);
+}
+
+# Ploticus treats any script line whose first non-blank character is
+# '#' as a directive (#include, #proc, #set, #if, ...). Text that
+# EasyTimeline writes as a bare line into a multi-line block of the
+# generated script ('stubs: text' bar labels, legend 'specifyorder:'
+# entries) must therefore never start that way. -noshell only disables
+# the shell-exec directives; #include still reads arbitrary files into
+# the rendered image, so strip the leading hashes outright.
+sub SanitizeStubText {
+    my $text = shift;
+    return ($text) if (!defined($text));
+    # Defence in depth: collapse any vertical whitespace so a later
+    # line can never begin a ploticus directive, then strip leading '#'
+    # runs. Callers (ParseBarData, ParseColors) already collapse
+    # newlines, but this keeps the helper safe if reached from a path
+    # that does not.
+    $text =~ s/\v+/ /gs;
+    while ($text =~ s/^\s*\#+//) { }
     return ($text);
 }
 
