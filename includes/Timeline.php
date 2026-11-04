@@ -81,46 +81,29 @@ class Timeline implements ParserFirstCallInitHook {
 			'pathPrefix' => $pathPrefix,
 		];
 
-		$exists = $backend->fileExists( [ 'src' => "{$pathPrefix}.png" ] );
-		if ( !$exists ) {
-			try {
-				self::renderTimeline( $timelinesrc, $options );
-			} catch ( TimelineException $e ) {
-				// TODO: add error tracking category
-				self::recordError( $e );
-				return $e->getHtml();
-			}
+		// Fandom-start PLATFORM-12018 Serve stored timeline images only. Never render or output the image map.
+		if ( !$backend->fileExists( [ 'src' => "{$pathPrefix}.png" ] ) ) {
+			// A storage error also ends here, so keep the message in the parser cache only briefly.
+			$pOutput->updateCacheExpiry( 3600 );
+			$guide = Html::element(
+				'a',
+				[ 'href' => 'https://dev.fandom.com/wiki/EasyTimeline_migration' ],
+				'EasyTimeline migration guide'
+			);
+			return Html::rawElement(
+				'div',
+				[ 'class' => [ 'error', 'timeline-error' ], 'lang' => 'en', 'dir' => 'ltr' ],
+				'This timeline cannot be displayed because timelines can no longer be created or changed. ' .
+					"Editors can replace it by following the $guide."
+			);
 		}
 
-		$map = Html::rawElement(
-			'map',
-			[ 'name' => "timeline_{$hash}" ],
-			str_replace(
-				' >',
-				' />',
-				$backend->getFileContents( [ 'src' => "{$pathPrefix}.map" ] )
-			)
-		);
-		try {
-			$map = self::fixMap( $map );
-		} catch ( TimelineException $e ) {
-			// TODO: add error tracking category
-			self::recordError( $e );
-			return $e->getHtml();
-		}
-
-		$img = Html::element(
-			'img',
-			[
-				'usemap' => "#timeline_{$hash}",
-				'src' => "{$wgUploadPath}/timeline/{$hash}.png",
-			]
-		);
 		return Html::rawElement(
 			'div',
 			[ 'class' => 'timeline-wrapper' ],
-			$map . $img
+			Html::element( 'img', [ 'src' => "{$wgUploadPath}/timeline/{$hash}.png" ] )
 		);
+		// Fandom-end PLATFORM-12018
 	}
 
 	/**
