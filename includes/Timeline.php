@@ -85,6 +85,11 @@ class Timeline implements ParserFirstCallInitHook {
 		if ( !$backend->fileExists( [ 'src' => "{$pathPrefix}.png" ] ) ) {
 			// A storage error also ends here, so keep the message in the parser cache only briefly.
 			$pOutput->updateCacheExpiry( 3600 );
+			$extension = Html::element(
+				'a',
+				[ 'href' => 'https://www.mediawiki.org/wiki/Extension:EasyTimeline' ],
+				'EasyTimeline'
+			);
 			$guide = Html::element(
 				'a',
 				[ 'href' => 'https://dev.fandom.com/wiki/EasyTimeline_migration' ],
@@ -93,7 +98,7 @@ class Timeline implements ParserFirstCallInitHook {
 			return Html::rawElement(
 				'div',
 				[ 'class' => [ 'error', 'timeline-error' ], 'lang' => 'en', 'dir' => 'ltr' ],
-				'This timeline cannot be displayed because timelines can no longer be created or changed. ' .
+				"This timeline cannot be displayed because $extension is no longer available on Fandom. " .
 					"Editors can replace it by following the $guide."
 			);
 		}
