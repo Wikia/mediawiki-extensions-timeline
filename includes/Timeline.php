@@ -15,6 +15,8 @@ use MediaWiki\WikiMap\WikiMap;
 use MediaWiki\Xml\Xml;
 use NullLockManager;
 use Shellbox\Command\BoxedCommand;
+use UploadBase;
+use UploadFromFile;
 use Wikimedia\FileBackend\FileBackend;
 use Wikimedia\FileBackend\FSFileBackend;
 use Wikimedia\ScopedCallback;
